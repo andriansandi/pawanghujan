@@ -1,9 +1,16 @@
+/* 1. Import Font Modern */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+
+/* 2. Base Reset & Layout Fix */
 body, html {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
   overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -11,28 +18,51 @@ body, html {
   height: 100%;
 }
 
+/* Biar semua elemen Evergreen & Lucide ikut font Inter */
+h1, h2, h3, h4, h5, h6, span, div, button, a, p {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* 3. Link Styling */
 a {
   color: inherit;
   text-decoration: underline;
   opacity: 0.8;
+  transition: opacity 0.2s ease;
 }
 
 a:hover {
   opacity: 1;
 }
 
-.animate-spin-slow svg {
+/* 4. Animations for Weather Icons */
+
+/* Sunny / Clear */
+.spin, .animate-spin-slow svg {
   animation: spin 10s linear infinite;
 }
 
-.animate-rain svg {
+/* Rain / Umbrella */
+.sway, .animate-rain svg {
   animation: bounce 2s ease-in-out infinite;
 }
 
-.animate-storm svg {
+/* Storm / Zap */
+.shake, .animate-storm svg {
   animation: shake 0.5s ease-in-out infinite;
 }
 
+/* Cloudy / Initial */
+.float { 
+  animation: float 3.5s ease-in-out infinite; 
+}
+
+/* Bird decoration */
+.bird-fly { 
+  animation: bird-fly 4s ease-in-out infinite; 
+}
+
+/* 5. Keyframes Definition */
 @keyframes spin {
   from { transform: rotate(0); }
   to { transform: rotate(360deg); }
@@ -47,4 +77,49 @@ a:hover {
   0%, 100% { transform: translate(0,0); }
   25% { transform: translate(-4px, 4px); }
   75% { transform: translate(4px, -4px); }
+}
+
+@keyframes float { 
+  0%, 100% { transform: translateY(0); } 
+  50% { transform: translateY(-15px); } 
+}
+
+@keyframes bird-fly { 
+  0%, 100% { transform: translate(0, 0); } 
+  50% { transform: translate(12px, -15px); } 
+}
+
+/* 6. Audio Control Button Fixes (Anti-Ghosting Icon) */
+
+.audio-control-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease !important;
+}
+
+.audio-control-btn:hover {
+  /* Background transparan agar icon putih tetap kontras */
+  background-color: rgba(255, 255, 255, 0.2) !important; 
+  transform: scale(1.1); 
+}
+
+.audio-control-btn svg {
+  color: white !important;
+  stroke: white !important;
+}
+
+.audio-control-btn:active {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(0.95);
+}
+
+/* 7. General Button Hover Effects */
+button {
+  transition: all 0.3s ease !important;
+}
+
+button:hover:not(.audio-control-btn) {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
 }

@@ -1,231 +1,283 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { 
-  Pane, Heading, Text, Button, majorScale, toaster 
+  Pane, Heading, Text, Button, majorScale, toaster
 } from 'evergreen-ui'
-import { Cloud, Umbrella, Zap, Sun, Bell, MapPin } from 'lucide-react'
+import { 
+  Umbrella, Zap, Sun, MapPin, Bird, CloudHail, Cloud, 
+  Volume2, VolumeX, Play, Pause 
+} from 'lucide-react'
 import './App.css'
 
-// --- DEFINISI TYPE ---
-type WeatherType = 'initial' | 'storm' | 'rain' | 'clear';
-
-interface StyleConfig {
-  bg: string;
-  intent: "none" | "danger" | "warning" | "success";
-  title: string;
-  icon: React.ReactNode;
-  desc: string;
-}
+type WeatherType = 'initial' | 'storm' | 'rain' | 'clear' | 'cloudy';
 
 interface WeatherResponse {
-  location: {
-    name: string;
-    region: string;
-  };
-  forecast: {
-    forecastday: Array<{
-      day: {
-        daily_chance_of_rain: number;
-      };
-    }>;
-  };
+  location: { name: string; region: string; };
+  forecast: { forecastday: Array<{ day: { daily_chance_of_rain: number; }; }>; };
 }
 
 const App: React.FC = () => {
   const [weatherType, setWeatherType] = useState<WeatherType>('initial');
-  const [loading, setLoading] = useState<boolean>(false);
-  const [chance, setChance] = useState<number>(0);
-  const [locationName, setLocationName] = useState<string>('Lokasi Anda');
+  const [loading, setLoading] = useState(false);
+  const [chance, setChance] = useState(0);
+  const [locationName, setLocationName] = useState('Lokasi Anda');
+  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
 
-  // --- FUNGSI LOG KE D1 ---
-  // Kita taruh di luar agar lebih rapi
-  const logLocationToD1 = async (lat: number, lon: number, data: WeatherResponse, rainChance: number) => {
-    const API_URL = import.meta.env.VITE_API_URL;
-    
-    if (!API_URL) {
-      console.error("API_URL tidak ditemukan di environment!");
-      return;
-    }
+  // Ganti URL ini dengan URL Bucket Cloudflare R2 kamu
+  const R2_URL = import.meta.env.VITE_R2_URL; 
 
-    try {
-      await fetch(`${API_URL}/log-location`, { 
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          lat,
-          lon,
-          location_name: data.location.name,
-          chance: rainChance,
-          weather_type: rainChance > 50 ? "Hujan" : "Cerah/Berawan",
-        }),
-      });
-      console.log("Log tersimpan via Worker!");
-    } catch (err) {
-      console.error("Gagal log ke D1:", err);
+  // Referensi Audio sesuai file di R2
+  const rainAudio = useRef(new Audio(`${R2_URL}/sounds/light-rain.mp3`));
+  const stormAudio = useRef(new Audio(`${R2_URL}/sounds/heavy-rain.mp3`));
+  const clearAudio = useRef(new Audio(`${R2_URL}/sounds/forest-bird.mp3`));
+  const cloudyAudio = useRef(new Audio(`${R2_URL}/sounds/mountain-wind.mp3`));
+
+  const allAudios = [rainAudio, stormAudio, clearAudio, cloudyAudio];
+
+  // --- AUDIO CONTROL LOGIC ---
+  useEffect(() => {
+    allAudios.forEach(a => { if (a.current) a.current.muted = isMuted; });
+  }, [isMuted]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      allAudios.forEach(a => a.current.pause());
+    } else {
+      playAudio();
     }
+  }, [isPlaying]);
+
+  const playAudio = () => {
+    if (!isPlaying) return;
+    allAudios.forEach(a => {
+      a.current.pause();
+      a.current.currentTime = 0;
+    });
+
+    const start = (ref: React.RefObject<HTMLAudioElement>) => {
+      if (ref.current) {
+        ref.current.loop = true;
+        ref.current.play().catch(() => {});
+      }
+    };
+
+    if (weatherType === 'rain') start(rainAudio);
+    else if (weatherType === 'storm') start(stormAudio);
+    else if (weatherType === 'clear') start(clearAudio);
+    else start(cloudyAudio);
   };
 
-  const fetchWeather = async (lat: number, lon: number): Promise<void> => {
+  useEffect(() => {
+    playAudio();
+  }, [weatherType]);
+
+  // --- FETCH WEATHER DATA ---
+  const fetchWeather = async (lat: number, lon: number) => {
     setLoading(true);
     try {
       const apiKey = import.meta.env.VITE_WEATHER_API_KEY;
-      
       const res = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${lat},${lon}&days=1`);
-
-      if (!res.ok) throw new Error("Gagal mengambil data cuaca");
-
-      const data = (await res.json()) as WeatherResponse; 
-
+      const data = await res.json() as WeatherResponse;
       const rainChance = data.forecast.forecastday[0].day.daily_chance_of_rain;
+
       setLocationName(data.location.name);
       setChance(rainChance);
 
-      let newType: WeatherType = 'clear';
-      if (rainChance > 70) newType = 'storm';
-      else if (rainChance > 25) newType = 'rain';
-      
-      setWeatherType(newType);
+      let type: WeatherType = 'clear';
+      if (rainChance > 70) type = 'storm';
+      else if (rainChance > 20) type = 'rain';
+      else if (rainChance > 0) type = 'cloudy';
 
-      // --- PANGGIL FUNGSI LOG DI SINI ---
-      await logLocationToD1(lat, lon, data, rainChance);
-
-    } catch (err: any) {
-      console.error(err.message);
-      toaster.danger("Pawang gagal memantau langit.", {
-        description: "Coba lagi beberapa saat ya!",
-        duration: 3
-      });
+      setWeatherType(type);
+      setIsPlaying(true);
+    } catch {
+      toaster.danger("Gagal memantau langit. Coba lagi nanti.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCheck = (): void => {
-    if (!navigator.geolocation) {
-      setLoading(false);
-      toaster.warning("Gagal akses lokasi.", {
-        description: "Browser kamu tidak mendukung GPS.",
-      });
-      return;
-    }
-
-    setLoading(true);
+  const handleCheck = () => {
     navigator.geolocation.getCurrentPosition(
-      (position: GeolocationPosition) => {
-        fetchWeather(position.coords.latitude, position.coords.longitude);
-      },
-      (error: GeolocationPositionError) => {
-        console.error(error.message);
-        setLoading(false);
-        toaster.warning("Gagal akses lokasi.", {
-          description: "Pastikan izin GPS di browser kamu sudah aktif.",
-        });
-      }
+      (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude)
     );
   };
 
-  const styles: Record<WeatherType, StyleConfig> = {
+  // --- THEME & UI CONFIG (Sangat Diperbarui) ---
+  const styles = {
     storm: { 
-      bg: "#FEF6F6", 
-      intent: "danger", 
-      title: "WAJIB JAS HUJAN!", 
-      icon: <Zap size={150} color="#D14343" className="animate-storm" />, 
-      desc: "Hujan deras/badai terdeteksi." 
+      bg: "#121212", title: "BADAI KAK!", color: "white", btn: "danger",
+      icon: <Zap size={160} color="#FFD600" className="shake" strokeWidth={1.5} />,
+      desc: `Waspada badai petir di ${locationName}`
     },
     rain: { 
-      bg: "#FFFBEC", 
-      intent: "warning", 
-      title: "BAWA PAYUNG", 
-      icon: <Umbrella size={150} color="#D9822B" className="animate-rain" />, 
-      desc: `Ada potensi hujan ${chance}% di ${locationName}.` 
+      bg: "#E3F2FD", title: "BAWA PAYUNG", color: "#1A237E", btn: "warning",
+      icon: <Umbrella size={160} color="#1E88E5" className="sway" strokeWidth={1.5} />,
+      desc: `Potensi hujan ${chance}% di ${locationName}`
+    },
+    cloudy: {
+      bg: "#F0F4F8", title: "MENDUNG", color: "#37474F", btn: "none",
+      icon: <Cloud size={160} color="#90A4AE" className="float" strokeWidth={1.5} />,
+      desc: `Langit berawan di ${locationName}`
     },
     clear: { 
-      bg: "#F7FFFD", 
-      intent: "success", 
-      title: "AMAN, GASPOL!", 
-      icon: <Sun size={150} color="#47B881" className="animate-spin-slow" />, 
-      desc: `Langit ${locationName} cerah.` 
+      bg: "#F1FBF7", title: "CERAH SEKALI", color: "#004D40", btn: "success",
+      icon: (
+        <Pane display="flex" justifyContent="center" alignItems="center">
+          <Sun size={160} color="#FFB300" className="spin" strokeWidth={1.5} />
+          <Bird size={45} color="#2E7D32" style={{ marginLeft: -30, marginTop: -60 }} className="bird-fly" strokeWidth={1.5} />
+        </Pane>
+      ),
+      desc: `Cuaca cerah di ${locationName}, selamat beraktivitas!`
     },
     initial: { 
-      bg: "#F5F7F9", 
-      intent: "none", 
-      title: "Pawang Hujan", 
-      icon: <Cloud size={120} color="#696f8c" />, 
-      desc: "Cek cuaca berdasarkan lokasi GPS kamu." 
+      bg: "#FFFFFF", title: "Pawang Hujan", color: "#234361", btn: "none",
+      icon: <CloudHail size={140} color="#696F8C" strokeWidth={1} />,
+      desc: "Ketuk tombol di bawah untuk memantau langit"
     }
   };
 
   const current = styles[weatherType];
 
   return (
-    <Pane 
-      display="flex" 
+    <Pane
+      display="flex"
       flexDirection="column"
-      alignItems="center" 
-      justifyContent="center" 
-      height="100vh" 
+      alignItems="center"
+      justifyContent="center"
+      height="100vh"
       width="100vw"
       backgroundColor={current.bg}
-      padding={majorScale(4)}
-      style={{ transition: 'all 0.5s ease' }}
+      position="relative"
+      overflow="hidden"
+      style={{ transition: 'background-color 0.8s ease' }}
     >
+      {/* 📦 CONTENT CONTAINER (Hierarki Tipografi Baru) */}
       <Pane 
         display="flex" 
         flexDirection="column" 
         alignItems="center" 
-        marginTop="auto"
-        marginBottom={majorScale(10)} 
+        textAlign="center" 
+        zIndex={10}
+        padding={majorScale(4)}
         width="100%"
-        maxWidth={500}
+        maxWidth={480}
       >
-        <Pane marginBottom={majorScale(1)}>
+        <Pane marginBottom={majorScale(5)} style={{ filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.05))' }}>
           {current.icon}
         </Pane>
-
-        <Heading size={1000} textAlign="center" fontWeight={900} marginBottom={majorScale(2)}>
+        
+        <Heading 
+          size={900} 
+          fontWeight={900} 
+          color={current.color}
+          style={{ 
+            letterSpacing: '-0.05em', 
+            lineHeight: 1,
+            textTransform: 'uppercase'
+          }}
+        >
           {current.title}
         </Heading>
-
-        <Text size={600} color="muted" textAlign="center">
+        
+        <Text 
+          size={600} 
+          marginTop={majorScale(2)} 
+          color={current.color} 
+          style={{ 
+            opacity: 0.7,
+            fontWeight: 500,
+            letterSpacing: '-0.01em',
+            maxWidth: '85%'
+          }}
+        >
           {current.desc}
         </Text>
-      </Pane>
 
-      <Pane 
-        width="100%" 
-        maxWidth={360} 
-        marginBottom={majorScale(4)}
-      >
-        <Button 
-          appearance="primary" 
-          intent={current.intent}
-          height={72} 
-          width="100%" 
-          iconBefore={MapPin}
-          isLoading={loading}
+        <Button
+          marginTop={majorScale(8)}
           onClick={handleCheck}
+          isLoading={loading}
+          iconBefore={MapPin}
+          height={64}
+          paddingX={majorScale(5)}
+          appearance="primary"
+          intent={current.btn}
           borderRadius={20}
-          fontSize={20}
-          fontWeight="bold"
+          fontSize={18}
+          fontWeight={700}
+          style={{
+            boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
+            transition: 'all 0.3s ease'
+          }}
         >
-          {weatherType === 'initial' ? 'CEK LOKASI SAYA' : 'UPDATE LAGI'}
-        </Button>
-
-        <Button 
-          marginTop={majorScale(3)}
-          appearance="minimal" 
-          iconBefore={Bell} 
-          width="100%"
-          onClick={() => Notification.requestPermission()}
-        >
-          Aktifkan Notifikasi Pagi
+          CEK LOKASI SAYA
         </Button>
       </Pane>
 
-      <Text marginTop="auto" marginBottom={majorScale(2)} color="muted" size={300}>
-        Created by <a href="https://linkedin.com/in/andriansandi" target="_blank" rel="noopener noreferrer">andriansandi</a>
-      </Text>
+      {/* 🎧 FLOATING AUDIO CONTROLS (Pembaruan UI Hover) */}
+      {weatherType !== 'initial' && (
+        <Pane 
+          position="fixed" 
+          bottom={majorScale(12)} 
+          display="flex" 
+          gap={majorScale(2)}
+          padding={majorScale(1)}
+          backgroundColor="rgba(0,0,0,0.7)"
+          borderRadius={40}
+          style={{ backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}
+          zIndex={100}
+        >
+          <Button 
+            onClick={() => setIsPlaying(!isPlaying)} 
+            appearance="minimal" 
+            borderRadius="50%" 
+            height={48} 
+            width={48}
+            className="audio-control-btn"
+            display="flex"
+            justifyContent="center"
+          >
+            {isPlaying ? <Pause color="white" size={24} /> : <Play color="white" size={24} />}
+          </Button>
+          <Button 
+            onClick={() => setIsMuted(!isMuted)} 
+            appearance="minimal" 
+            borderRadius="50%" 
+            height={48} 
+            width={48}
+            className="audio-control-btn"
+            display="flex"
+            justifyContent="center"
+          >
+            {isMuted ? <VolumeX color="white" size={24} /> : <Volume2 color="white" size={24} />}
+          </Button>
+        </Pane>
+      )}
+
+      {/* 📝 FOOTER (Link ke LinkedIn kamu) */}
+      <Pane 
+        position="absolute" 
+        bottom={majorScale(3)} 
+        zIndex={10}
+      >
+        <Text size={300} color={current.color} style={{ opacity: 0.5 }}>
+          Created by{' '}
+          <a 
+            href="https://linkedin.com/in/andriansandi" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ 
+              color: current.color, 
+              fontWeight: 700, 
+              textDecoration: 'none',
+              borderBottom: `1.5px solid ${current.color}`
+            }}
+          >
+            andriansandi
+          </a>
+        </Text>
+      </Pane>
     </Pane>
   );
 };
