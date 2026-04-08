@@ -13,7 +13,8 @@
     "evergreen-ui": "^7.1.9",
     "lucide-react": "^1.7.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-helmet-async": "^3.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260408.1",

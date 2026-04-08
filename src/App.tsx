@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Helmet } from 'react-helmet-async';
 import { 
   Pane, Heading, Text, Button, majorScale, toaster
 } from 'evergreen-ui'
@@ -7,6 +8,8 @@ import {
   Volume2, VolumeX, Play, Pause 
 } from 'lucide-react'
 import './App.css'
+
+const GA_ID = import.meta.env.VITE_GA_ID || "G-NS06QPTCGY";
 
 type WeatherType = 'initial' | 'storm' | 'rain' | 'clear' | 'cloudy';
 
@@ -152,6 +155,22 @@ const App: React.FC = () => {
       overflow="hidden"
       style={{ transition: 'background-color 0.8s ease' }}
     >
+      <Helmet>
+        {/* SEO Dinamis: Judul berubah sesuai kondisi cuaca */}
+        <title>{weatherType === 'initial' ? 'Pawang Hujan' : `${current.title} | Pawang Hujan`}</title>
+        <meta name="description" content="Cek cuaca dengan gaya anak senja yang puitis. Cocok untuk teman berteduh di Cileunyi dan sekitarnya." />
+        
+        {/* Google Analytics 4 */}
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}></script>
+        <script>
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}');
+          `}
+        </script>
+      </Helmet>
       {/* 📦 CONTENT CONTAINER (Hierarki Tipografi Baru) */}
       <Pane 
         display="flex" 
