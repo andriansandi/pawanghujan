@@ -1,0 +1,14 @@
+{
+  "name": "pawanghujan2",
+  "compatibility_date": "2025-12-30",
+  "assets": {
+    "directory": "./dist"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pawanghujan-db",
+      "database_id": "b81ee825-2a11-43d3-9ea0-278cd34ca6f5"
+    }
+  ]
+}

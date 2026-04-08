@@ -4,7 +4,10 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "esnext",
-    "types": ["vite/client"],
+    "types": [
+      "vite/client",
+      "@cloudflare/workers-types"
+    ],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -19,7 +22,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    
   },
-  "include": ["src"]
+  "include": ["src", "functions"]
 }
