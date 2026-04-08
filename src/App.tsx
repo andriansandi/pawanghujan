@@ -16,13 +16,6 @@ interface StyleConfig {
   desc: string;
 }
 
-// Tambahkan definisi untuk Vite Env agar tidak merah di editor
-interface ImportMeta {
-  readonly env: {
-    readonly VITE_WEATHER_API_KEY: string;
-  }
-}
-
 interface WeatherResponse {
   location: {
     name: string;
@@ -43,19 +36,47 @@ const App: React.FC = () => {
   const [chance, setChance] = useState<number>(0);
   const [locationName, setLocationName] = useState<string>('Lokasi Anda');
 
+  // --- FUNGSI LOG KE D1 ---
+  // Kita taruh di luar agar lebih rapi
+  const logLocationToD1 = async (lat: number, lon: number, data: WeatherResponse, rainChance: number) => {
+    const API_URL = import.meta.env.VITE_API_URL;
+    
+    if (!API_URL) {
+      console.error("API_URL tidak ditemukan di environment!");
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/log-location`, { 
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lat,
+          lon,
+          location_name: data.location.name,
+          chance: rainChance,
+          weather_type: rainChance > 50 ? "Hujan" : "Cerah/Berawan",
+        }),
+      });
+      console.log("Log tersimpan via Worker!");
+    } catch (err) {
+      console.error("Gagal log ke D1:", err);
+    }
+  };
+
   const fetchWeather = async (lat: number, lon: number): Promise<void> => {
     setLoading(true);
     try {
-      const apiKey = (import.meta as unknown as ImportMeta).env.VITE_WEATHER_API_KEY;
+      const apiKey = import.meta.env.VITE_WEATHER_API_KEY;
       
       const res = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${lat},${lon}&days=1`);
 
       if (!res.ok) throw new Error("Gagal mengambil data cuaca");
 
-      // 2. Beritahu TypeScript bahwa data ini bertipe WeatherResponse
       const data = (await res.json()) as WeatherResponse; 
 
-      // Sekarang TS tidak akan protes lagi karena dia tahu 'data' punya 'forecast' dan 'location'
       const rainChance = data.forecast.forecastday[0].day.daily_chance_of_rain;
       setLocationName(data.location.name);
       setChance(rainChance);
@@ -66,18 +87,8 @@ const App: React.FC = () => {
       
       setWeatherType(newType);
 
-      // Kirim log ke backend (D1 via Hono /api)
-      fetch('/api/log-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lat,
-          lon,
-          location_name: data.location.name,
-          chance: rainChance,
-          weather_type: newType
-        })
-      }).catch(err => console.error("Gagal log ke D1", err));
+      // --- PANGGIL FUNGSI LOG DI SINI ---
+      await logLocationToD1(lat, lon, data, rainChance);
 
     } catch (err: any) {
       console.error(err.message);
