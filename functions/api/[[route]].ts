@@ -6,7 +6,7 @@ type Bindings = {
   DB: D1Database
 }
 
-const app = new Hono<{ Bindings: Bindings }>().basePath('/api')
+const app = new Hono<{ Bindings: Bindings }>()
 
 app.post('/log-location', async (c) => {
   try {
