@@ -114,7 +114,6 @@ a:hover {
   transform: scale(0.95);
 }
 
-/* 7. General Button Hover Effects */
 button {
   transition: all 0.3s ease !important;
 }
@@ -122,4 +121,19 @@ button {
 button:hover:not(.audio-control-btn) {
   transform: translateY(-2px);
   filter: brightness(1.05);
+}
+
+.fade-in-up {
+  animation: fadeInUp 1s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
