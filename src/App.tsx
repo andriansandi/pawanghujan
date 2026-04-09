@@ -189,12 +189,6 @@ const App: React.FC = () => {
       <Helmet>
         <title>{weatherType === 'initial' ? 'Pawang Hujan' : `${current.title} | Pawang Hujan`}</title>
         <meta name="description" content="Cek cuaca dengan gaya anak senja yang puitis." />
-        
-        {/* PRELOAD STRATEGY (High Priority) */}
-        <link rel="preload" href={`${R2_URL}/sounds/light-rain.mp3`} as="audio" />
-        <link rel="preload" href={`${R2_URL}/sounds/heavy-rain.mp3`} as="audio" />
-        <link rel="preload" href={`${R2_URL}/sounds/forest-bird.mp3`} as="audio" />
-        <link rel="preload" href={`${R2_URL}/sounds/mountain-wind.mp3`} as="audio" />
 
         {/* Google Analytics 4 */}
         <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}></script>
