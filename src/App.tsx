@@ -121,12 +121,13 @@ const App: React.FC = () => {
       setIsPlaying(true);
 
       logLocation({
-        latitude: lat,
-        longitude: lon,
+        lat: lat,
+        lon: lon,
         weather_type: type,
-        location_name: data.location.name
+        location_name: data.location.name,
+        chance: rainChance
       });
-      
+
     } catch {
       toaster.danger("Gagal memantau langit.");
     } finally {

@@ -1,8 +1,9 @@
 interface LogData {
-  latitude: number;
-  longitude: number;
+  lat: number;
+  lon: number;
   weather_type: string;
   location_name: string;
+  chance: number;
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
