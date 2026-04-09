@@ -1,19 +1,23 @@
+// src/components/WeatherDisplay.tsx
 import React from 'react'
 import { Pane, Heading, Text, Button, majorScale } from 'evergreen-ui'
 import { MapPin } from 'lucide-react'
+import { AIQuoteCard } from './AIQuoteCard'
 
 interface WeatherDisplayProps {
   icon: React.ReactNode;
   title: string;
-  desc: string;
+  desc: string; // Tetap string karena yang dikirim sudah hasil eksekusi fungsi
   color: string;
-  btnIntent: any;
+  // Kita perbaiki tipe btnIntent agar sesuai dengan ekspektasi Evergreen UI
+  btnIntent: "success" | "warning" | "danger" | "none"; 
   loading: boolean;
   onCheck: () => void;
+  aiQuote: string;
 }
 
 export const WeatherDisplay: React.FC<WeatherDisplayProps> = ({
-  icon, title, desc, color, btnIntent, loading, onCheck
+  icon, title, desc, color, btnIntent, loading, onCheck, aiQuote
 }) => (
   <Pane 
     display="flex" 
@@ -46,17 +50,20 @@ export const WeatherDisplay: React.FC<WeatherDisplayProps> = ({
     >
       {desc}
     </Text>
+
+    <AIQuoteCard quote={aiQuote || ""} color={color} />
     
     <Button
       marginTop={majorScale(8)} 
       onClick={onCheck} 
       isLoading={loading}
-      iconBefore={MapPin} // Evergreen Button pinter, dia bisa nerima komponen Lucide langsung
+      disabled={loading}
+      iconBefore={MapPin}
       height={64} 
       paddingX={majorScale(5)}
       appearance="primary" 
-      intent={btnIntent} 
-      borderRadius={32} // Dibuat lebih bulat biar makin cakep
+      intent={btnIntent === "none" ? undefined : btnIntent} 
+      borderRadius={32}
       fontSize={18} 
       fontWeight={700} 
       style={{ 
