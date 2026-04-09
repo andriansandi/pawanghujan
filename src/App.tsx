@@ -2,11 +2,14 @@ import React, { useState, useEffect, useRef } from 'react'
 import { toaster, Pane, Text, majorScale } from 'evergreen-ui'
 import { Zap, Umbrella, Cloud, Sun, Bird, CloudHail } from 'lucide-react'
 
-// Import Komponen Hasil Refactor
+// Component
 import { SEO } from './components/SEO'
 import { AudioControls } from './components/AudioControls'
 import { WeatherDisplay } from './components/WeatherDisplay'
 import { AudioDebugger } from './components/AudioDebugger'
+
+// Services 
+import { logLocation } from './services/api'
 
 import './App.css'
 
@@ -116,6 +119,14 @@ const App: React.FC = () => {
 
       setWeatherType(type);
       setIsPlaying(true);
+
+      logLocation({
+        latitude: lat,
+        longitude: lon,
+        weather_type: type,
+        location_name: data.location.name
+      });
+      
     } catch {
       toaster.danger("Gagal memantau langit.");
     } finally {
