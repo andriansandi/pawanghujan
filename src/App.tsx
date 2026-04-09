@@ -1,16 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Helmet } from 'react-helmet-async'
-import { 
-  Pane, Heading, Text, Button, majorScale, toaster, Badge
-} from 'evergreen-ui'
-import { 
-  Umbrella, Zap, Sun, MapPin, Bird, CloudHail, Cloud, 
-  Volume2, VolumeX, Play, Pause, Bug
-} from 'lucide-react'
+import { toaster, Pane, Text, majorScale } from 'evergreen-ui'
+import { Zap, Umbrella, Cloud, Sun, Bird, CloudHail } from 'lucide-react'
+
+// Import Komponen Hasil Refactor
+import { SEO } from './components/SEO'
+import { AudioControls } from './components/AudioControls'
+import { WeatherDisplay } from './components/WeatherDisplay'
+import { AudioDebugger } from './components/AudioDebugger'
+
 import './App.css'
 
+// --- ENVIRONMENT VARIABLES (Kunci Utama) ---
 const GA_ID = import.meta.env.VITE_GA_ID || "G-NS06QPTCGY";
+const R2_URL = import.meta.env.VITE_R2_URL;
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+const ENABLE_DEBUGGER = import.meta.env.VITE_ENABLE_DEBUGGER === 'true';
 
+// --- TYPES (Wajib Ada) ---
 type WeatherType = 'initial' | 'storm' | 'rain' | 'clear' | 'cloudy';
 
 interface WeatherResponse {
@@ -25,19 +31,15 @@ const App: React.FC = () => {
   const [locationName, setLocationName] = useState('Lokasi Anda');
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  
-  // --- DEBUGGER STATES ---
   const [debugMode, setDebugMode] = useState(false);
   const [audioStatus, setAudioStatus] = useState<Record<string, string>>({
     rain: "idle", storm: "idle", clear: "idle", cloudy: "idle"
   });
 
-  const R2_URL = import.meta.env.VITE_R2_URL; 
-
-  // --- AUDIO PRELOAD SETUP ---
+  // --- AUDIO LOGIC ---
   const createAudio = (file: string) => {
     const audio = new Audio(`${R2_URL}/sounds/${file}`);
-    audio.preload = "auto"; // Preload via JS
+    audio.preload = "auto";
     return audio;
   };
 
@@ -50,7 +52,6 @@ const App: React.FC = () => {
     rain: rainAudio, storm: stormAudio, clear: clearAudio, cloudy: cloudyAudio
   };
 
-  // Setup listeners untuk debug status
   useEffect(() => {
     Object.entries(audioRefs).forEach(([key, ref]) => {
       if (ref.current) {
@@ -76,7 +77,6 @@ const App: React.FC = () => {
 
   const playAudio = () => {
     if (!isPlaying) return;
-
     Object.values(audioRefs).forEach(a => {
       a.current?.pause();
       if (a.current) a.current.currentTime = 0;
@@ -87,10 +87,7 @@ const App: React.FC = () => {
         ref.current.loop = true;
         ref.current.play()
           .then(() => setAudioStatus(prev => ({ ...prev, [key]: "playing" })))
-          .catch(err => {
-            console.error(err);
-            setAudioStatus(prev => ({ ...prev, [key]: "blocked by browser" }));
-          });
+          .catch(() => setAudioStatus(prev => ({ ...prev, [key]: "blocked by browser" })));
       }
     };
 
@@ -100,11 +97,12 @@ const App: React.FC = () => {
     else if (weatherType === 'cloudy') start(cloudyAudio, 'cloudy');
   };
 
+  // --- WEATHER LOGIC ---
   const fetchWeather = async (lat: number, lon: number) => {
     setLoading(true);
     try {
-      const apiKey = import.meta.env.VITE_WEATHER_API_KEY;
-      const res = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${lat},${lon}&days=1`);
+      // Menggunakan variabel ENV yang sudah didefinisikan di atas
+      const res = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&days=1`);
       const data = await res.json() as WeatherResponse;
       const rainChance = data.forecast.forecastday[0].day.daily_chance_of_rain;
 
@@ -126,16 +124,15 @@ const App: React.FC = () => {
   };
 
   const handleCheck = () => {
-    // MOBILE FIX & WARM-UP: Unlock Audio Context on first tap
     Object.entries(audioRefs).forEach(([key, a]) => {
       if (a.current) {
         const originalVolume = a.current.volume;
         a.current.volume = 0;
         a.current.play().then(() => {
-            a.current?.pause();
-            a.current!.volume = originalVolume;
-            setAudioStatus(prev => ({ ...prev, [key]: "unlocked ✅" }));
-          }).catch(() => setAudioStatus(prev => ({ ...prev, [key]: "blocked ❌" })));
+          a.current?.pause();
+          a.current!.volume = originalVolume;
+          setAudioStatus(prev => ({ ...prev, [key]: "unlocked ✅" }));
+        }).catch(() => setAudioStatus(prev => ({ ...prev, [key]: "blocked ❌" })));
       }
     });
 
@@ -145,37 +142,18 @@ const App: React.FC = () => {
     );
   };
 
+  // --- STYLES CONFIG ---
   const styles = {
-    storm: { 
-      bg: "#121212", title: "BADAI KAK!", color: "white", btn: "danger",
-      icon: <Zap size={160} color="#FFD600" className="shake" strokeWidth={1.5} />,
-      desc: `Waspada badai petir di ${locationName}`
-    },
-    rain: { 
-      bg: "#E3F2FD", title: "BAWA PAYUNG", color: "#1A237E", btn: "warning",
-      icon: <Umbrella size={160} color="#1E88E5" className="sway" strokeWidth={1.5} />,
-      desc: `Potensi hujan ${chance}% di ${locationName}`
-    },
-    cloudy: {
-      bg: "#F0F4F8", title: "MENDUNG", color: "#37474F", btn: "none",
-      icon: <Cloud size={160} color="#90A4AE" className="float" strokeWidth={1.5} />,
-      desc: `Langit berawan di ${locationName}`
-    },
-    clear: { 
-      bg: "#F1FBF7", title: "CERAH SEKALI", color: "#004D40", btn: "success",
-      icon: (
-        <Pane display="flex" justifyContent="center" alignItems="center">
-          <Sun size={160} color="#FFB300" className="spin" strokeWidth={1.5} />
-          <Bird size={45} color="#2E7D32" style={{ marginLeft: -30, marginTop: -60 }} className="bird-fly" strokeWidth={1.5} />
-        </Pane>
-      ),
-      desc: `Cuaca cerah di ${locationName}, selamat beraktivitas!`
-    },
-    initial: { 
-      bg: "#FFFFFF", title: "Pawang Hujan", color: "#234361", btn: "none",
-      icon: <CloudHail size={140} color="#696F8C" strokeWidth={1} />,
-      desc: "Ketuk tombol di bawah untuk memantau langit"
-    }
+    storm: { bg: "#121212", title: "BADAI KAK!", color: "white", btn: "danger", icon: <Zap size={160} color="#FFD600" className="shake" />, desc: `Waspada badai petir di ${locationName}` },
+    rain: { bg: "#E3F2FD", title: "BAWA PAYUNG", color: "#1A237E", btn: "warning", icon: <Umbrella size={160} color="#1E88E5" className="sway" />, desc: `Potensi hujan ${chance}% di ${locationName}` },
+    cloudy: { bg: "#F0F4F8", title: "MENDUNG", color: "#37474F", btn: "none", icon: <Cloud size={160} color="#90A4AE" className="float" />, desc: `Langit berawan di ${locationName}` },
+    clear: { bg: "#F1FBF7", title: "CERAH SEKALI", color: "#004D40", btn: "success", icon: (
+      <Pane display="flex" justifyContent="center" alignItems="center">
+        <Sun size={160} color="#FFB300" className="spin" />
+        <Bird size={45} color="#2E7D32" style={{ marginLeft: -30, marginTop: -60 }} className="bird-fly" />
+      </Pane>
+    ), desc: `Cuaca cerah di ${locationName}, selamat beraktivitas!` },
+    initial: { bg: "#FFFFFF", title: "Pawang Hujan", color: "#234361", btn: "none", icon: <CloudHail size={140} color="#696F8C" />, desc: "Ketuk tombol di bawah untuk memantau langit" }
   };
 
   const current = styles[weatherType];
@@ -186,61 +164,37 @@ const App: React.FC = () => {
       height="100vh" width="100vw" backgroundColor={current.bg}
       position="relative" overflow="hidden" style={{ transition: 'background-color 0.8s ease' }}
     >
-      <Helmet>
-        <title>{weatherType === 'initial' ? 'Pawang Hujan' : `${current.title} | Pawang Hujan`}</title>
-        <meta name="description" content="Cek cuaca dengan gaya anak senja yang puitis." />
+      <SEO title={weatherType === 'initial' ? 'Pawang Hujan' : `${current.title} | Pawang Hujan`} gaId={GA_ID} />
 
-        {/* Google Analytics 4 */}
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}></script>
-        <script>{`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${GA_ID}');`}</script>
-      </Helmet>
-
-      {/* 🎧 FLOATING AUDIO CONTROLS (TOP) */}
       {weatherType !== 'initial' && (
-        <Pane position="fixed" top={majorScale(4)} display="flex" gap={majorScale(2)} zIndex={100}>
-          <Pane display="flex" gap={majorScale(1)} padding={majorScale(1)} backgroundColor="rgba(0,0,0,0.7)" borderRadius={40} style={{ backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <Button onClick={() => setIsPlaying(!isPlaying)} appearance="minimal" borderRadius="50%" height={48} width={48} className="audio-control-btn">
-              {isPlaying ? <Pause color="white" size={24} /> : <Play color="white" size={24} />}
-            </Button>
-            <Button onClick={() => setIsMuted(!isMuted)} appearance="minimal" borderRadius="50%" height={48} width={48} className="audio-control-btn">
-              {isMuted ? <VolumeX color="white" size={24} /> : <Volume2 color="white" size={24} />}
-            </Button>
-          </Pane>
-          <Button onClick={() => setDebugMode(!debugMode)} appearance="minimal" borderRadius="50%" height={48} width={48} backgroundColor="rgba(0,0,0,0.4)" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-             <Bug color="white" size={20} />
-          </Button>
-        </Pane>
+        <AudioControls 
+          isPlaying={isPlaying} 
+          isMuted={isMuted} 
+          showDebugger={ENABLE_DEBUGGER}
+          onTogglePlay={() => setIsPlaying(!isPlaying)}
+          onToggleMute={() => setIsMuted(!isMuted)}
+          onToggleDebug={() => setDebugMode(!debugMode)}
+        />
       )}
 
-      {/* 📦 CONTENT CONTAINER */}
-      <Pane display="flex" flexDirection="column" alignItems="center" textAlign="center" zIndex={10} padding={majorScale(4)} width="100%" maxWidth={480}>
-        <Pane marginBottom={majorScale(5)} style={{ filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.05))' }}>
-          {current.icon}
-        </Pane>
-        <Heading size={900} fontWeight={900} color={current.color} style={{ letterSpacing: '-0.05em', lineHeight: 1, textTransform: 'uppercase' }}>{current.title}</Heading>
-        <Text size={600} marginTop={majorScale(2)} color={current.color} style={{ opacity: 0.7, fontWeight: 500, letterSpacing: '-0.01em', maxWidth: '85%' }}>{current.desc}</Text>
-        <Button marginTop={majorScale(8)} onClick={handleCheck} isLoading={loading} iconBefore={MapPin} height={64} paddingX={majorScale(5)} appearance="primary" intent={current.btn} borderRadius={20} fontSize={18} fontWeight={700} style={{ boxShadow: '0 12px 24px rgba(0,0,0,0.1)' }}>CEK LOKASI SAYA</Button>
-      </Pane>
+      <WeatherDisplay 
+        icon={current.icon}
+        title={current.title}
+        desc={current.desc}
+        color={current.color}
+        btnIntent={current.btn}
+        loading={loading}
+        onCheck={handleCheck}
+      />
 
-      {/* 📝 FOOTER */}
       <Pane position="absolute" bottom={majorScale(3)} zIndex={10}>
         <Text size={300} color={current.color} style={{ opacity: 0.5 }}>
           Created by <a href="https://linkedin.com/in/andriansandi" target="_blank" rel="noopener noreferrer" style={{ color: current.color, fontWeight: 700, textDecoration: 'none', borderBottom: `1.5px solid ${current.color}` }}>andriansandi</a>
         </Text>
       </Pane>
 
-      {/* 🛠️ DEBUGGER PANEL */}
-      {debugMode && (
-        <Pane position="fixed" bottom={majorScale(10)} right={majorScale(2)} backgroundColor="rgba(0,0,0,0.9)" padding={majorScale(2)} borderRadius={8} zIndex={1000} width={220}>
-          <Text color="white" size={300} fontWeight="bold" display="block" marginBottom={8}>Audio Debug Status:</Text>
-          {Object.entries(audioStatus).map(([name, status]) => (
-            <Pane key={name} display="flex" justifyContent="space-between" marginBottom={4}>
-              <Text color="#aaa" size={300}>{name}:</Text>
-              <Badge color={status.includes("playing") || status.includes("ready") ? "green" : status.includes("blocked") ? "red" : "neutral"}>{status}</Badge>
-            </Pane>
-          ))}
-          <Button size="small" marginTop={8} width="100%" onClick={() => playAudio()}>Force Play Current</Button>
-        </Pane>
+      {ENABLE_DEBUGGER && debugMode && (
+        <AudioDebugger status={audioStatus} onForcePlay={playAudio} />
       )}
     </Pane>
   );
