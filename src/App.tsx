@@ -34,10 +34,17 @@ const App: React.FC = () => {
 
   const R2_URL = import.meta.env.VITE_R2_URL; 
 
-  const rainAudio = useRef(new Audio(`${R2_URL}/sounds/light-rain.mp3`));
-  const stormAudio = useRef(new Audio(`${R2_URL}/sounds/heavy-rain.mp3`));
-  const clearAudio = useRef(new Audio(`${R2_URL}/sounds/forest-bird.mp3`));
-  const cloudyAudio = useRef(new Audio(`${R2_URL}/sounds/mountain-wind.mp3`));
+  // --- AUDIO PRELOAD SETUP ---
+  const createAudio = (file: string) => {
+    const audio = new Audio(`${R2_URL}/sounds/${file}`);
+    audio.preload = "auto"; // Preload via JS
+    return audio;
+  };
+
+  const rainAudio = useRef(createAudio('light-rain.mp3'));
+  const stormAudio = useRef(createAudio('heavy-rain.mp3'));
+  const clearAudio = useRef(createAudio('forest-bird.mp3'));
+  const cloudyAudio = useRef(createAudio('mountain-wind.mp3'));
 
   const audioRefs: Record<string, React.RefObject<HTMLAudioElement>> = {
     rain: rainAudio, storm: stormAudio, clear: clearAudio, cloudy: cloudyAudio
@@ -50,6 +57,7 @@ const App: React.FC = () => {
         ref.current.onplay = () => setAudioStatus(prev => ({ ...prev, [key]: "playing" }));
         ref.current.onpause = () => setAudioStatus(prev => ({ ...prev, [key]: "paused" }));
         ref.current.onerror = () => setAudioStatus(prev => ({ ...prev, [key]: "error/blocked" }));
+        ref.current.oncanplaythrough = () => setAudioStatus(prev => ({ ...prev, [key]: "ready (buffered)" }));
       }
     });
   }, []);
@@ -118,12 +126,17 @@ const App: React.FC = () => {
   };
 
   const handleCheck = () => {
-    // Unlock Audio Context (Crucial for Mobile)
+    // MOBILE FIX & WARM-UP: Unlock Audio Context on first tap
     Object.entries(audioRefs).forEach(([key, a]) => {
-      a.current?.play().then(() => {
-          a.current?.pause();
-          setAudioStatus(prev => ({ ...prev, [key]: "unlocked ✅" }));
-        }).catch(() => setAudioStatus(prev => ({ ...prev, [key]: "blocked ❌" })));
+      if (a.current) {
+        const originalVolume = a.current.volume;
+        a.current.volume = 0;
+        a.current.play().then(() => {
+            a.current?.pause();
+            a.current!.volume = originalVolume;
+            setAudioStatus(prev => ({ ...prev, [key]: "unlocked ✅" }));
+          }).catch(() => setAudioStatus(prev => ({ ...prev, [key]: "blocked ❌" })));
+      }
     });
 
     navigator.geolocation.getCurrentPosition(
@@ -176,6 +189,14 @@ const App: React.FC = () => {
       <Helmet>
         <title>{weatherType === 'initial' ? 'Pawang Hujan' : `${current.title} | Pawang Hujan`}</title>
         <meta name="description" content="Cek cuaca dengan gaya anak senja yang puitis." />
+        
+        {/* PRELOAD STRATEGY (High Priority) */}
+        <link rel="preload" href={`${R2_URL}/sounds/light-rain.mp3`} as="audio" />
+        <link rel="preload" href={`${R2_URL}/sounds/heavy-rain.mp3`} as="audio" />
+        <link rel="preload" href={`${R2_URL}/sounds/forest-bird.mp3`} as="audio" />
+        <link rel="preload" href={`${R2_URL}/sounds/mountain-wind.mp3`} as="audio" />
+
+        {/* Google Analytics 4 */}
         <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}></script>
         <script>{`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${GA_ID}');`}</script>
       </Helmet>
@@ -217,14 +238,14 @@ const App: React.FC = () => {
       {/* 🛠️ DEBUGGER PANEL */}
       {debugMode && (
         <Pane position="fixed" bottom={majorScale(10)} right={majorScale(2)} backgroundColor="rgba(0,0,0,0.9)" padding={majorScale(2)} borderRadius={8} zIndex={1000} width={220}>
-          <Text color="white" size={300} fontWeight="bold" display="block" marginBottom={8}>Audio Status:</Text>
+          <Text color="white" size={300} fontWeight="bold" display="block" marginBottom={8}>Audio Debug Status:</Text>
           {Object.entries(audioStatus).map(([name, status]) => (
             <Pane key={name} display="flex" justifyContent="space-between" marginBottom={4}>
               <Text color="#aaa" size={300}>{name}:</Text>
-              <Badge color={status.includes("playing") ? "green" : status.includes("blocked") ? "red" : "neutral"}>{status}</Badge>
+              <Badge color={status.includes("playing") || status.includes("ready") ? "green" : status.includes("blocked") ? "red" : "neutral"}>{status}</Badge>
             </Pane>
           ))}
-          <Button size="small" marginTop={8} width="100%" onClick={() => playAudio()}>Test Play</Button>
+          <Button size="small" marginTop={8} width="100%" onClick={() => playAudio()}>Force Play Current</Button>
         </Pane>
       )}
     </Pane>
