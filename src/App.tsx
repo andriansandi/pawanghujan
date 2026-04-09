@@ -26,10 +26,8 @@ const App: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
 
-  // Ganti URL ini dengan URL Bucket Cloudflare R2 kamu
   const R2_URL = import.meta.env.VITE_R2_URL; 
 
-  // Referensi Audio sesuai file di R2
   const rainAudio = useRef(new Audio(`${R2_URL}/sounds/light-rain.mp3`));
   const stormAudio = useRef(new Audio(`${R2_URL}/sounds/heavy-rain.mp3`));
   const clearAudio = useRef(new Audio(`${R2_URL}/sounds/forest-bird.mp3`));
@@ -37,21 +35,24 @@ const App: React.FC = () => {
 
   const allAudios = [rainAudio, stormAudio, clearAudio, cloudyAudio];
 
-  // --- AUDIO CONTROL LOGIC ---
+  // Logic Mute
   useEffect(() => {
     allAudios.forEach(a => { if (a.current) a.current.muted = isMuted; });
   }, [isMuted]);
 
+  // Logic Play/Pause
   useEffect(() => {
     if (!isPlaying) {
       allAudios.forEach(a => a.current.pause());
-    } else {
+    } else if (weatherType !== 'initial') {
       playAudio();
     }
-  }, [isPlaying]);
+  }, [isPlaying, weatherType]);
 
   const playAudio = () => {
     if (!isPlaying) return;
+
+    // Stop semua dulu
     allAudios.forEach(a => {
       a.current.pause();
       a.current.currentTime = 0;
@@ -60,21 +61,20 @@ const App: React.FC = () => {
     const start = (ref: React.RefObject<HTMLAudioElement>) => {
       if (ref.current) {
         ref.current.loop = true;
-        ref.current.play().catch(() => {});
+        // Mobile Fix: Harus dipastikan dipicu lewat user gesture
+        const playPromise = ref.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => console.log("Playback failed:", error));
+        }
       }
     };
 
     if (weatherType === 'rain') start(rainAudio);
     else if (weatherType === 'storm') start(stormAudio);
     else if (weatherType === 'clear') start(clearAudio);
-    else start(cloudyAudio);
+    else if (weatherType === 'cloudy') start(cloudyAudio);
   };
 
-  useEffect(() => {
-    playAudio();
-  }, [weatherType]);
-
-  // --- FETCH WEATHER DATA ---
   const fetchWeather = async (lat: number, lon: number) => {
     setLoading(true);
     try {
@@ -94,19 +94,27 @@ const App: React.FC = () => {
       setWeatherType(type);
       setIsPlaying(true);
     } catch {
-      toaster.danger("Gagal memantau langit. Coba lagi nanti.");
+      toaster.danger("Gagal memantau langit.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleCheck = () => {
+    // MOBILE FIX: "Unlock" audio context pada tap pertama
+    allAudios.forEach(a => {
+      a.current.play().then(() => a.current.pause()).catch(() => {});
+    });
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude)
+      (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        setLoading(false);
+        toaster.warning("Izin lokasi ditolak.");
+      }
     );
   };
 
-  // --- THEME & UI CONFIG (Sangat Diperbarui) ---
   const styles = {
     storm: { 
       bg: "#121212", title: "BADAI KAK!", color: "white", btn: "danger",
@@ -144,157 +152,63 @@ const App: React.FC = () => {
 
   return (
     <Pane
-      display="flex"
-      flexDirection="column"
-      alignItems="center"
-      justifyContent="center"
-      height="100vh"
-      width="100vw"
-      backgroundColor={current.bg}
-      position="relative"
-      overflow="hidden"
-      style={{ transition: 'background-color 0.8s ease' }}
+      display="flex" flexDirection="column" alignItems="center" justifyContent="center"
+      height="100vh" width="100vw" backgroundColor={current.bg}
+      position="relative" overflow="hidden" style={{ transition: 'background-color 0.8s ease' }}
     >
       <Helmet>
-        {/* SEO Dinamis: Judul berubah sesuai kondisi cuaca */}
         <title>{weatherType === 'initial' ? 'Pawang Hujan' : `${current.title} | Pawang Hujan`}</title>
-        <meta name="description" content="Cek cuaca dengan gaya anak senja yang puitis. Cocok untuk teman berteduh di Cileunyi dan sekitarnya." />
-        
-        {/* Google Analytics 4 */}
+        <meta name="description" content="Cek cuaca dengan gaya anak senja yang puitis." />
         <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}></script>
-        <script>
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '${GA_ID}');
-          `}
-        </script>
+        <script>{`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${GA_ID}');`}</script>
       </Helmet>
-      {/* 📦 CONTENT CONTAINER (Hierarki Tipografi Baru) */}
-      <Pane 
-        display="flex" 
-        flexDirection="column" 
-        alignItems="center" 
-        textAlign="center" 
-        zIndex={10}
-        padding={majorScale(4)}
-        width="100%"
-        maxWidth={480}
-      >
-        <Pane marginBottom={majorScale(5)} style={{ filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.05))' }}>
-          {current.icon}
-        </Pane>
-        
-        <Heading 
-          size={900} 
-          fontWeight={900} 
-          color={current.color}
-          style={{ 
-            letterSpacing: '-0.05em', 
-            lineHeight: 1,
-            textTransform: 'uppercase'
-          }}
-        >
-          {current.title}
-        </Heading>
-        
-        <Text 
-          size={600} 
-          marginTop={majorScale(2)} 
-          color={current.color} 
-          style={{ 
-            opacity: 0.7,
-            fontWeight: 500,
-            letterSpacing: '-0.01em',
-            maxWidth: '85%'
-          }}
-        >
-          {current.desc}
-        </Text>
 
-        <Button
-          marginTop={majorScale(8)}
-          onClick={handleCheck}
-          isLoading={loading}
-          iconBefore={MapPin}
-          height={64}
-          paddingX={majorScale(5)}
-          appearance="primary"
-          intent={current.btn}
-          borderRadius={20}
-          fontSize={18}
-          fontWeight={700}
-          style={{
-            boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          CEK LOKASI SAYA
-        </Button>
-      </Pane>
-
-      {/* 🎧 FLOATING AUDIO CONTROLS (Pembaruan UI Hover) */}
+      {/* 🎧 FLOATING AUDIO CONTROLS (Pindah ke Atas) */}
       {weatherType !== 'initial' && (
         <Pane 
-          position="fixed" 
-          bottom={majorScale(12)} 
-          display="flex" 
-          gap={majorScale(2)}
-          padding={majorScale(1)}
-          backgroundColor="rgba(0,0,0,0.7)"
-          borderRadius={40}
+          position="fixed" top={majorScale(4)} display="flex" gap={majorScale(2)}
+          padding={majorScale(1)} backgroundColor="rgba(0,0,0,0.7)" borderRadius={40}
           style={{ backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}
           zIndex={100}
         >
-          <Button 
-            onClick={() => setIsPlaying(!isPlaying)} 
-            appearance="minimal" 
-            borderRadius="50%" 
-            height={48} 
-            width={48}
-            className="audio-control-btn"
-            display="flex"
-            justifyContent="center"
-          >
+          <Button onClick={() => setIsPlaying(!isPlaying)} appearance="minimal" borderRadius="50%" height={48} width={48} className="audio-control-btn">
             {isPlaying ? <Pause color="white" size={24} /> : <Play color="white" size={24} />}
           </Button>
-          <Button 
-            onClick={() => setIsMuted(!isMuted)} 
-            appearance="minimal" 
-            borderRadius="50%" 
-            height={48} 
-            width={48}
-            className="audio-control-btn"
-            display="flex"
-            justifyContent="center"
-          >
+          <Button onClick={() => setIsMuted(!isMuted)} appearance="minimal" borderRadius="50%" height={48} width={48} className="audio-control-btn">
             {isMuted ? <VolumeX color="white" size={24} /> : <Volume2 color="white" size={24} />}
           </Button>
         </Pane>
       )}
 
-      {/* 📝 FOOTER (Link ke LinkedIn kamu) */}
-      <Pane 
-        position="absolute" 
-        bottom={majorScale(3)} 
-        zIndex={10}
-      >
+      {/* 📦 CONTENT CONTAINER */}
+      <Pane display="flex" flexDirection="column" alignItems="center" textAlign="center" zIndex={10} padding={majorScale(4)} width="100%" maxWidth={480}>
+        <Pane marginBottom={majorScale(5)} style={{ filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.05))' }}>
+          {current.icon}
+        </Pane>
+        
+        <Heading size={900} fontWeight={900} color={current.color} style={{ letterSpacing: '-0.05em', lineHeight: 1, textTransform: 'uppercase' }}>
+          {current.title}
+        </Heading>
+        
+        <Text size={600} marginTop={majorScale(2)} color={current.color} style={{ opacity: 0.7, fontWeight: 500, letterSpacing: '-0.01em', maxWidth: '85%' }}>
+          {current.desc}
+        </Text>
+
+        <Button
+          marginTop={majorScale(8)} onClick={handleCheck} isLoading={loading}
+          iconBefore={MapPin} height={64} paddingX={majorScale(5)}
+          appearance="primary" intent={current.btn} borderRadius={20}
+          fontSize={18} fontWeight={700}
+          style={{ boxShadow: '0 12px 24px rgba(0,0,0,0.1)', transition: 'all 0.3s ease' }}
+        >
+          CEK LOKASI SAYA
+        </Button>
+      </Pane>
+
+      {/* 📝 FOOTER */}
+      <Pane position="absolute" bottom={majorScale(3)} zIndex={10}>
         <Text size={300} color={current.color} style={{ opacity: 0.5 }}>
-          Created by{' '}
-          <a 
-            href="https://linkedin.com/in/andriansandi" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ 
-              color: current.color, 
-              fontWeight: 700, 
-              textDecoration: 'none',
-              borderBottom: `1.5px solid ${current.color}`
-            }}
-          >
-            andriansandi
-          </a>
+          Created by <a href="https://linkedin.com/in/andriansandi" target="_blank" rel="noopener noreferrer" style={{ color: current.color, fontWeight: 700, textDecoration: 'none', borderBottom: `1.5px solid ${current.color}` }}>andriansandi</a>
         </Text>
       </Pane>
     </Pane>
